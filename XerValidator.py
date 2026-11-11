@@ -67,28 +67,39 @@ def validate_xer(xer_data, high_float_threshold=80.0):
         valid_relationships["pred_task_id"]
     )
 
-    # Find missing predecessors.
-    missing_predecessors = valid_tasks[
-        ~valid_tasks["task_id"].isin(
-            activities_with_predecessors
-        )
-    ].copy()
+    # Milestones are allowed to sit at the edge of the network:
+    #   TT_Mile    = start milestone  -> no predecessor expected
+    #   TT_FinMile = finish milestone -> no successor expected
+    task_type = valid_tasks.get(
+        "task_type", pd.Series("", index=valid_tasks.index)
+    ).astype("string").str.strip()
 
-    missing_predecessors["missing_type"] = "Predecessor"
-
-    # Find missing successors.
-    missing_successors = valid_tasks[
-        ~valid_tasks["task_id"].isin(
-            activities_with_successors
-        )
-    ].copy()
-
-    missing_successors["missing_type"] = "Successor"
-
-    missing_links = pd.concat(
-        [missing_predecessors, missing_successors],
-        ignore_index=True
+    no_predecessor = (
+        ~valid_tasks["task_id"].isin(activities_with_predecessors)
+        & (task_type != "TT_Mile")
     )
+
+    no_successor = (
+        ~valid_tasks["task_id"].isin(activities_with_successors)
+        & (task_type != "TT_FinMile")
+    )
+
+    # One row per activity, labelled with what is missing.
+    missing_links = valid_tasks[no_predecessor | no_successor].copy()
+
+    missing_links["missing_type"] = "Successor"
+    missing_links.loc[
+        no_predecessor[missing_links.index]
+        & ~no_successor[missing_links.index],
+        "missing_type"
+    ] = "Predecessor"
+    missing_links.loc[
+        no_predecessor[missing_links.index]
+        & no_successor[missing_links.index],
+        "missing_type"
+    ] = "Predecessor and Successor"
+
+    missing_links = missing_links.reset_index(drop=True)
 
     # Convert total float into numeric values.
     valid_tasks["total_float_hr_cnt"] = pd.to_numeric(
