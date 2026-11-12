@@ -71,7 +71,7 @@ def parse_xer(file_path: str | Path) -> XERData:
     text = _read_text(path)
 
     try:
-        reader = csv.reader(text.splitlines(), delimiter="\t", quotechar='"')
+        reader = csv.reader(text.splitlines(), delimiter="\t", quoting=csv.QUOTE_NONE)
         for row in reader:
             line_number = reader.line_num
             if not row or not any(value.strip() for value in row):
